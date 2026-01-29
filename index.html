@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกความดันโลหิต</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-blue-50 p-4 min-h-screen">
+    <div class="max-w-md mx-auto">
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold text-blue-700 mb-2 text-center">🏥 BP Tracker</h1>
+            <p class="text-gray-500 text-sm text-center mb-6">บันทึกค่าความดันรายวัน</p>
+
+            <div class="space-y-4">
+                <input type="text" id="name" placeholder="ชื่อ-นามสกุล" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-400">
+                <div class="flex gap-4">
+                    <input type="number" id="sys" placeholder="SYS (บน)" class="w-1/2 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-red-400">
+                    <input type="number" id="dia" placeholder="DIA (ล่าง)" class="w-1/2 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <button onclick="submitData()" id="btnSave" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">บันทึกข้อมูล</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-lg p-4 mb-6">
+            <h2 class="font-bold mb-4 text-gray-700">กราฟความดัน 7 ครั้งล่าสุด</h2>
+            <canvas id="bpChart"></canvas>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-lg p-4">
+            <h2 class="font-bold mb-2 text-gray-700">ประวัติการบันทึก (Local)</h2>
+            <div id="history" class="text-sm divide-y"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwbmfSl6KudqXeBpH0PvMNqT9XOC3iTax8NX09gnquG8uqhFZpoP4O2s2dNS-Oygjb3KA/exec"; 
+
+        async function submitData() {
+            const name = document.getElementById('name').value;
+            const sys = document.getElementById('sys').value;
+            const dia = document.getElementById('dia').value;
+            if(!name || !sys || !dia) return alert('กรุณากรอกข้อมูลให้ครบ');
+
+            const btn = document.getElementById('btnSave');
+            btn.disabled = true; btn.innerText = "กำลังบันทึก...";
+
+            const payload = { name, sys: parseInt(sys), dia: parseInt(dia) };
+
+            try {
+                // 1. ส่งไป Google Sheets (ให้ Admin เห็น)
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+
+                // 2. เก็บลง Local Storage (ให้ผู้ป่วยเห็นทันที)
+                let localRecords = JSON.parse(localStorage.getItem('myBP')) || [];
+                localRecords.push({ ...payload, date: new Date().toLocaleDateString('th-TH') });
+                if(localRecords.length > 7) localRecords.shift(); // เก็บแค่ 7 ค่าล่าสุด
+                localStorage.setItem('myBP', JSON.stringify(localRecords));
+
+                alert('บันทึกเรียบร้อย!');
+                location.reload();
+            } catch (e) { alert('เกิดข้อผิดพลาด'); }
+        }
+
+        function renderUI() {
+            const data = JSON.parse(localStorage.getItem('myBP')) || [];
+            const historyDiv = document.getElementById('history');
+            
+            // แสดงรายการ
+            historyDiv.innerHTML = data.reverse().map(i => `
+                <div class="py-2 flex justify-between">
+                    <span>${i.date}</span>
+                    <span class="font-bold">${i.sys}/${i.dia}</span>
+                </div>
+            `).join('');
+
+            // วาดกราฟ
+            const ctx = document.getElementById('bpChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(i => i.date).reverse(),
+                    datasets: [
+                        { label: 'SYS', data: data.map(i => i.sys).reverse(), borderColor: '#ef4444', tension: 0.3 },
+                        { label: 'DIA', data: data.map(i => i.dia).reverse(), borderColor: '#3b82f6', tension: 0.3 }
+                    ]
+                }
+            });
+        }
+        renderUI();
+    </script>
+</body>
+</html>
